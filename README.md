@@ -14,8 +14,8 @@ Ultra-optimized lossless image to SVG converter.
 
 ## Usage
 
+### Absolute Minimum
 ```bash
-# Absolute Minimum
 pixel2svg input.jpg
 ```
 ## With options

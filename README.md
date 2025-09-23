@@ -18,22 +18,30 @@ Ultra-optimized lossless image to SVG converter.
 # Absolute Minimum
 pixel2svg input.jpg
 ```
-# With options
+## With options
 ```bash
 # Auto-generate output name
 pixel2svg photo.jpg
+```
 
-# Explicit output name
+```bash
+### Explicit output name
 pixel2svg input.png output.svg
+```
 
-# Resize with auto-generated name
+```bash
+### Resize with auto-generated name
 pixel2svg -i large.jpg -w 1920
+```
 
-# Multiple files (use in scripts)
+```bash
+### Multiple files (use in scripts)
 pixel2svg -q image1.jpg
 pixel2svg -q image2.png
 ```
+
 ## Options
+
 ```
 -i, --input     Input image file (required)
 -o, --output    Output SVG file (required)  

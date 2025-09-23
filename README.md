@@ -19,8 +19,9 @@ Ultra-optimized lossless image to SVG converter.
 pixel2svg input.jpg
 ```
 ## With options
+
+### Auto-generate output name
 ```bash
-# Auto-generate output name
 pixel2svg photo.jpg
 ```
 

@@ -11,43 +11,38 @@ import (
 
 func main() {
 	if len(os.Args) < 3 {
-		log.Fatal("Usage: imgtosvg input.jpg output.svg")
+		log.Fatal("use: pixel2svg input.jpg output.svg")
 	}
 
-	inputPath := os.Args[1]
-	outputPath := os.Args[2]
-
-	file, err := os.Open(inputPath)
+	imgFile, err := os.Open(os.Args[1])
 	if err != nil {
-		log.Fatal("Error opening image:", err)
+		log.Fatal("err open file:", err)
 	}
-	defer file.Close()
+	defer imgFile.Close()
 
-	img, _, err := image.Decode(file)
+	img, _, err := image.Decode(imgFile)
 	if err != nil {
-		log.Fatal("Error decoding image:", err)
+		log.Fatal("err decode:", err)
 	}
 
 	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
+	w, h := bounds.Dx(), bounds.Dy()
 
-	outFile, err := os.Create(outputPath)
+	out, err := os.Create(os.Args[2])
 	if err != nil {
-		log.Fatal("Error creating SVG file:", err)
+		log.Fatal("err create svg:", err)
 	}
-	defer outFile.Close()
+	defer out.Close()
 
-	outFile.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
-	outFile.WriteString(`<svg width="` + strconv.Itoa(width) + `" height="` + strconv.Itoa(height) + `" viewBox="0 0 ` + strconv.Itoa(width) + ` ` + strconv.Itoa(height) + `" xmlns="http://www.w3.org/2000/svg">`)
+	out.WriteString(`<svg width="` + strconv.Itoa(w) + `" height="` + strconv.Itoa(h) + `" xmlns="http://www.w3.org/2000/svg">`)
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
 			r, g, b, _ := img.At(x, y).RGBA()
-			outFile.WriteString(`<rect x="` + strconv.Itoa(x) + `" y="` + strconv.Itoa(y) + `" width="1" height="1" fill="rgb(` + strconv.Itoa(int(r>>8)) + `,` + strconv.Itoa(int(g>>8)) + `,` + strconv.Itoa(int(b>>8)) + `)"/>`)
+			out.WriteString(`<rect x="` + strconv.Itoa(x) + `" y="` + strconv.Itoa(y) + `" width=1 height=1 fill="rgb(` + strconv.Itoa(int(r>>8)) + `,` + strconv.Itoa(int(g>>8)) + `,` + strconv.Itoa(int(b>>8)) + `)"/>`)
 		}
 	}
 
-	outFile.WriteString(`</svg>`)
-	log.Printf("SVG created: %s (%dx%d pixels)", outputPath, width, height)
+	out.WriteString(`</svg>`)
+	log.Print("done: ", os.Args[2])
 }

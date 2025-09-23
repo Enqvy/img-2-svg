@@ -21,7 +21,6 @@ pixel2svg input.jpg
 ### Auto-generated output name
 ```bash
 pixel2svg photo.png
-# produces photo.svg
 ```
 
 ### Explicit output name

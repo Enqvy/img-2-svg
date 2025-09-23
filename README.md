@@ -24,18 +24,18 @@ pixel2svg input.jpg
 pixel2svg photo.jpg
 ```
 
-```bash
 ### Explicit output name
+```bash
 pixel2svg input.png output.svg
 ```
 
-```bash
 ### Resize with auto-generated name
+```bash
 pixel2svg -i large.jpg -w 1920
 ```
 
+### Multiple files (in scripts)
 ```bash
-### Multiple files (use in scripts)
 pixel2svg -q image1.jpg
 pixel2svg -q image2.png
 ```

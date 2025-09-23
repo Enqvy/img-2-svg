@@ -78,7 +78,8 @@ func loadImage(path string) (image.Image, error) {
 		return nil, err
 	}
 	defer file.Close()
-	return image.Decode(file)
+	img, _, err := image.Decode(file)  // Fixed: ignore the format string
+	return img, err
 }
 
 func resizeImage(img image.Image, maxW, maxH int) image.Image {

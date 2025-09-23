@@ -1,8 +1,18 @@
-# ImgToSVG Converter
+# PixelToSVG
 
-Lossless image to SVG converter with basic optimization.
-added 2D block optimization.
+Ultra-optimized lossless image to SVG converter.
+
 ## Usage
 
 ```bash
-imgtosvg.exe input.jpg output.svg
+# Basic usage
+pixel2svg input.jpg output.svg
+
+# With options
+pixel2svg -i input.jpg -o output.svg -w 1920 -h 1080
+
+## Options
+-i, --input    Input image file (required)
+-o, --output   Output SVG file (required)  
+-w, --width    Max width (default: original size)
+-h, --height   Max height (default: original size)

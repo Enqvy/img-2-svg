@@ -1,3 +1,6 @@
+
+# main.go
+```go
 package main
 
 import (
@@ -28,6 +31,16 @@ func main() {
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 
+	// Store pixels in 2D array
+	pixels := make([][]string, h)
+	for y := 0; y < h; y++ {
+		pixels[y] = make([]string, w)
+		for x := 0; x < w; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			pixels[y][x] = strconv.Itoa(int(r>>8)) + "," + strconv.Itoa(int(g>>8)) + "," + strconv.Itoa(int(b>>8))
+		}
+	}
+
 	out, err := os.Create(os.Args[2])
 	if err != nil {
 		log.Fatal("err create svg:", err)
@@ -36,10 +49,20 @@ func main() {
 
 	out.WriteString(`<svg width="` + strconv.Itoa(w) + `" height="` + strconv.Itoa(h) + `" xmlns="http://www.w3.org/2000/svg">`)
 
+	// Merge same-colored pixels into rectangles
 	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			r, g, b, _ := img.At(x, y).RGBA()
-			out.WriteString(`<rect x="` + strconv.Itoa(x) + `" y="` + strconv.Itoa(y) + `" width=1 height=1 fill="rgb(` + strconv.Itoa(int(r>>8)) + `,` + strconv.Itoa(int(g>>8)) + `,` + strconv.Itoa(int(b>>8)) + `)"/>`)
+		x := 0
+		for x < w {
+			color := pixels[y][x]
+			width := 1
+			
+			// Find how many consecutive pixels have same color
+			for x+width < w && pixels[y][x+width] == color {
+				width++
+			}
+			
+			out.WriteString(`<rect x="` + strconv.Itoa(x) + `" y="` + strconv.Itoa(y) + `" width="` + strconv.Itoa(width) + `" height="1" fill="rgb(` + color + `)"/>`)
+			x += width
 		}
 	}
 

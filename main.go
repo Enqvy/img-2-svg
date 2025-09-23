@@ -19,6 +19,7 @@ type Block struct {
 }
 
 var quiet bool
+var force bool
 
 func main() {
 	var input, output string
@@ -34,6 +35,8 @@ func main() {
 	flag.IntVar(&height, "height", 0, "Max height (0 = original)")
 	flag.BoolVar(&quiet, "q", false, "Quiet mode (no progress bar)")
 	flag.BoolVar(&quiet, "quiet", false, "Quiet mode (no progress bar)")
+	flag.BoolVar(&force, "f", false, "Force overwrite existing files")
+	flag.BoolVar(&force, "force", false, "Force overwrite existing files")
 	flag.Parse()
 
 	// Support positional arguments
@@ -58,6 +61,11 @@ func main() {
 
 	if !fileExists(input) {
 		log.Fatal("Input file not found:", input)
+	}
+
+	// Check if output file exists and handle overwrite
+	if fileExists(output) && !force {
+		log.Fatal("Output file already exists: ", output, " (use --force to overwrite)")
 	}
 
 	startTime := time.Now()

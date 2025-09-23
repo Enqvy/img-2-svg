@@ -68,10 +68,16 @@ func main() {
 		log.Fatal("Output file already exists: ", output, " (use --force to overwrite)")
 	}
 
+	// Get input file size
+	inputSize, err := getFileSize(input)
+	if err != nil {
+		log.Fatal("Error getting input file size:", err)
+	}
+
 	startTime := time.Now()
 	
 	if !quiet {
-		fmt.Printf("Converting %s...\n", filepath.Base(input))
+		fmt.Printf("Converting %s (%s)...\n", filepath.Base(input), formatFileSize(inputSize))
 	}
 
 	img, err := loadImage(input)
@@ -98,16 +104,57 @@ func main() {
 
 	progress.Finish()
 	
+	// Get output file size
+	outputSize, err := getFileSize(output)
+	if err != nil {
+		log.Fatal("Error getting output file size:", err)
+	}
+
 	duration := time.Since(startTime)
 	
 	if !quiet {
-		fmt.Printf("Converted: %s -> %s\n", filepath.Base(input), filepath.Base(output))
-		fmt.Printf("Stats: %d blocks from %d pixels (%.1fx reduction)\n", 
-			len(blocks), w*h, float64(w*h)/float64(len(blocks)))
-		fmt.Printf("Time: %v\n", duration.Round(time.Millisecond))
+		reduction := float64(inputSize-outputSize) / float64(inputSize) * 100
+		fmt.Printf("Conversion complete:\n")
+		fmt.Printf("  Input:  %s (%s)\n", filepath.Base(input), formatFileSize(inputSize))
+		fmt.Printf("  Output: %s (%s)\n", filepath.Base(output), formatFileSize(outputSize))
+		fmt.Printf("  Size reduction: %.1f%%\n", reduction)
+		fmt.Printf("  Pixels: %d -> Blocks: %d (%.1fx compression)\n", w*h, len(blocks), float64(w*h)/float64(len(blocks)))
+		fmt.Printf("  Time: %v\n", duration.Round(time.Millisecond))
 	} else {
-		log.Printf("Converted: %s -> %s (%d blocks, %v)", 
-			filepath.Base(input), filepath.Base(output), len(blocks), duration)
+		reduction := float64(inputSize-outputSize) / float64(inputSize) * 100
+		log.Printf("Converted: %s (%s) -> %s (%s) - %.1f%% reduction, %d blocks, %v", 
+			filepath.Base(input), formatFileSize(inputSize),
+			filepath.Base(output), formatFileSize(outputSize),
+			reduction, len(blocks), duration)
+	}
+}
+
+// Get file size in bytes
+func getFileSize(path string) (int64, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return fileInfo.Size(), nil
+}
+
+// Format file size to human readable string
+func formatFileSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+		GB = MB * 1024
+	)
+
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d bytes", bytes)
 	}
 }
 

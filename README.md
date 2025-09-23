@@ -1,28 +1,27 @@
 # PixelToSVG
 
-Ultra-optimized lossless image to SVG converter.
+High-performance lossless image → SVG converter with strict validation and block-based optimization.
 
-## Progress Features
+## Features
 
-- Real-time progress bar with ETA estimation
-
-- Multiple stages: resizing, analysis, block detection, writing
-
-- Performance stats: compression ratio and processing time
-
-- Quiet mode for scripts and batch processing
+- Real-time progress bar with ETA  
+- Multi-stage pipeline: resize → analyze → block detection → write  
+- Compression stats: ratio, blocks, time, size reduction  
+- Quiet mode for batch processing  
+- Force overwrite option  
+- Input validation: format, size, dimensions  
 
 ## Usage
 
-### Absolute Minimum
+### Minimal
 ```bash
 pixel2svg input.jpg
 ```
-## With options
 
-### Auto-generate output name
+### Auto-generated output name
 ```bash
-pixel2svg photo.jpg
+pixel2svg photo.png
+# produces photo.svg
 ```
 
 ### Explicit output name
@@ -30,23 +29,26 @@ pixel2svg photo.jpg
 pixel2svg input.png output.svg
 ```
 
-### Resize with auto-generated name
+### Resize on conversion
 ```bash
 pixel2svg -i large.jpg -w 1920
 ```
 
-### Multiple files (in scripts)
+### Multiple files in scripts
 ```bash
 pixel2svg -q image1.jpg
 pixel2svg -q image2.png
 ```
 
 ## Options
+```
+-i, --input     Input image file (required if no positional argument)
+-o, --output    Output SVG file (optional, auto-generated if omitted)
+-w, --width     Max width (0 = original)
+-h, --height    Max height (0 = original)
+-q, --quiet     Quiet mode (no progress bar)
+-f, --force     Overwrite existing output
+```
 
-```
--i, --input     Input image file (required)
--o, --output    Output SVG file (required)  
--w, --width     Max width (default: original size)
--h, --height    Max height (default: original size)
--q, --quiet     Quiet mode - disable progress bar
-```
+## Supported Formats
+JPG, JPEG, PNG, GIF, BMP, TIFF

@@ -11,6 +11,11 @@ High-performance lossless image → SVG converter with strict validation and blo
 - Force overwrite option  
 - Input validation: format, size, dimensions  
 
+## How to build
+```bash
+go build -o pixel2svg.exe .
+```
+
 ## Usage
 
 ### Minimal

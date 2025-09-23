@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -9,12 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 type Block struct {
 	x, y, w, h int
 	r, g, b    uint8
 }
+
+var quiet bool
 
 func main() {
 	var input, output string
@@ -28,6 +32,8 @@ func main() {
 	flag.IntVar(&width, "width", 0, "Max width (0 = original)")
 	flag.IntVar(&height, "h", 0, "Max height (0 = original)")
 	flag.IntVar(&height, "height", 0, "Max height (0 = original)")
+	flag.BoolVar(&quiet, "q", false, "Quiet mode (no progress bar)")
+	flag.BoolVar(&quiet, "quiet", false, "Quiet mode (no progress bar)")
 	flag.Parse()
 
 	// Support positional arguments
@@ -44,6 +50,12 @@ func main() {
 		log.Fatal("Input file not found:", input)
 	}
 
+	startTime := time.Now()
+	
+	if !quiet {
+		fmt.Printf("🔄 Converting %s...\n", filepath.Base(input))
+	}
+
 	img, err := loadImage(input)
 	if err != nil {
 		log.Fatal("Error loading image:", err)
@@ -57,14 +69,92 @@ func main() {
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 
-	blocks := findOptimalBlocks(img, w, h)
+	// Create progress tracker
+	progress := NewProgressTracker(w*h, quiet)
 	
-	if err := writeSVG(blocks, w, h, output); err != nil {
+	blocks := findOptimalBlocks(img, w, h, progress)
+	
+	if err := writeSVG(blocks, w, h, output, progress); err != nil {
 		log.Fatal("Error writing SVG:", err)
 	}
 
-	log.Printf("Converted: %s -> %s (%d blocks from %d pixels)", 
-		filepath.Base(input), filepath.Base(output), len(blocks), w*h)
+	progress.Finish()
+	
+	duration := time.Since(startTime)
+	
+	if !quiet {
+		fmt.Printf("✅ Converted: %s → %s\n", filepath.Base(input), filepath.Base(output))
+		fmt.Printf("📊 Stats: %d blocks from %d pixels (%.1fx reduction)\n", 
+			len(blocks), w*h, float64(w*h)/float64(len(blocks)))
+		fmt.Printf("⏱️  Time: %v\n", duration.Round(time.Millisecond))
+	} else {
+		log.Printf("Converted: %s -> %s (%d blocks, %v)", 
+			filepath.Base(input), filepath.Base(output), len(blocks), duration)
+	}
+}
+
+// ProgressTracker handles progress display
+type ProgressTracker struct {
+	total     int
+	processed int
+	quiet     bool
+	startTime time.Time
+	lastUpdate time.Time
+}
+
+func NewProgressTracker(total int, quiet bool) *ProgressTracker {
+	return &ProgressTracker{
+		total:     total,
+		quiet:     quiet,
+		startTime: time.Now(),
+		lastUpdate: time.Now(),
+	}
+}
+
+func (p *ProgressTracker) Update(increment int) {
+	if p.quiet {
+		return
+	}
+	
+	p.processed += increment
+	
+	// Only update progress bar every 100ms to avoid flickering
+	if time.Since(p.lastUpdate) < 100*time.Millisecond && p.processed < p.total {
+		return
+	}
+	p.lastUpdate = time.Now()
+	
+	percent := float64(p.processed) / float64(p.total) * 100
+	barWidth := 50
+	completed := int(float64(barWidth) * percent / 100)
+	
+	bar := "["
+	for i := 0; i < barWidth; i++ {
+		if i < completed {
+			bar += "="
+		} else if i == completed {
+			bar += ">"
+		} else {
+			bar += " "
+		}
+	}
+	bar += "]"
+	
+	elapsed := time.Since(p.startTime)
+	eta := time.Duration(0)
+	if percent > 0 {
+		totalEstimate := time.Duration(float64(elapsed) / percent * 100)
+		eta = totalEstimate - elapsed
+	}
+	
+	fmt.Printf("\r%s %.1f%% ETA: %v", bar, percent, eta.Round(time.Second))
+}
+
+func (p *ProgressTracker) Finish() {
+	if p.quiet {
+		return
+	}
+	fmt.Printf("\r[==================================================] 100.0%% ETA: 0s\n")
 }
 
 func fileExists(path string) bool {
@@ -78,7 +168,7 @@ func loadImage(path string) (image.Image, error) {
 		return nil, err
 	}
 	defer file.Close()
-	img, _, err := image.Decode(file)  // Fixed: ignore the format string
+	img, _, err := image.Decode(file)
 	return img, err
 }
 
@@ -90,7 +180,6 @@ func resizeImage(img image.Image, maxW, maxH int) image.Image {
 		return img
 	}
 
-	// Calculate new size maintaining aspect ratio
 	newW, newH := calculateSize(w, h, maxW, maxH)
 	if newW == w && newH == h {
 		return img
@@ -106,7 +195,9 @@ func resizeImage(img image.Image, maxW, maxH int) image.Image {
 		}
 	}
 
-	log.Printf("Resized: %dx%d -> %dx%d", w, h, newW, newH)
+	if !quiet {
+		fmt.Printf("📐 Resized: %dx%d → %dx%d\n", w, h, newW, newH)
+	}
 	return resized
 }
 
@@ -130,13 +221,18 @@ func calculateSize(w, h, maxW, maxH int) (int, int) {
 	return int(float64(maxH) * ratio), maxH
 }
 
-func findOptimalBlocks(img image.Image, w, h int) []Block {
+func findOptimalBlocks(img image.Image, w, h int, progress *ProgressTracker) []Block {
+	if !quiet {
+		fmt.Printf("🔍 Analyzing image...\n")
+	}
+
 	grid := make([][]uint32, h)
 	for y := 0; y < h; y++ {
 		grid[y] = make([]uint32, w)
 		for x := 0; x < w; x++ {
 			r, g, b, _ := img.At(x, y).RGBA()
 			grid[y][x] = (uint32(r>>8) << 16) | (uint32(g>>8) << 8) | uint32(b>>8)
+			progress.Update(1) // Update progress for each pixel processed
 		}
 	}
 
@@ -146,6 +242,10 @@ func findOptimalBlocks(img image.Image, w, h int) []Block {
 	}
 
 	var blocks []Block
+
+	if !quiet {
+		fmt.Printf("🧩 Finding optimal blocks...\n")
+	}
 
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
@@ -234,7 +334,11 @@ func findMaxHeight(grid [][]uint32, x, y int, color uint32, width, maxY int) int
 	return h
 }
 
-func writeSVG(blocks []Block, w, h int, path string) error {
+func writeSVG(blocks []Block, w, h int, path string, progress *ProgressTracker) error {
+	if !quiet {
+		fmt.Printf("💾 Writing SVG file...\n")
+	}
+
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -244,10 +348,16 @@ func writeSVG(blocks []Block, w, h int, path string) error {
 	file.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
 	file.WriteString(`<svg width="` + strconv.Itoa(w) + `" height="` + strconv.Itoa(h) + `" xmlns="http://www.w3.org/2000/svg">`)
 
-	for _, b := range blocks {
+	// Update progress during SVG writing (for large numbers of blocks)
+	for i, b := range blocks {
 		file.WriteString(`<rect x="` + strconv.Itoa(b.x) + `" y="` + strconv.Itoa(b.y) + 
 			`" width="` + strconv.Itoa(b.w) + `" height="` + strconv.Itoa(b.h) + 
 			`" fill="rgb(` + strconv.Itoa(int(b.r)) + `,` + strconv.Itoa(int(b.g)) + `,` + strconv.Itoa(int(b.b)) + `)"/>`)
+		
+		// Update progress every 100 blocks to avoid slowing down too much
+		if i%100 == 0 {
+			progress.Update(0) // 0 means just update the display
+		}
 	}
 
 	file.WriteString(`</svg>`)

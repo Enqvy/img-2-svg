@@ -1,6 +1,3 @@
-
-# main.go
-```go
 package main
 
 import (

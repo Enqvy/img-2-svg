@@ -37,13 +37,23 @@ func main() {
 	flag.Parse()
 
 	// Support positional arguments
-	if input == "" && len(flag.Args()) >= 2 {
+	if input == "" && len(flag.Args()) >= 1 {
 		input = flag.Arg(0)
-		output = flag.Arg(1)
+		if len(flag.Args()) >= 2 {
+			output = flag.Arg(1)
+		}
 	}
 
-	if input == "" || output == "" {
-		log.Fatal("Usage: pixel2svg -i input.jpg -o output.svg\n       pixel2svg input.jpg output.svg")
+	if input == "" {
+		log.Fatal("Usage: pixel2svg -i input.jpg -o output.svg\n       pixel2svg input.jpg [output.svg]")
+	}
+
+	// Auto-generate output filename if not provided
+	if output == "" {
+		output = autoGenerateOutputName(input)
+		if !quiet {
+			fmt.Printf("Output file not specified, using: %s\n", filepath.Base(output))
+		}
 	}
 
 	if !fileExists(input) {
@@ -53,7 +63,7 @@ func main() {
 	startTime := time.Now()
 	
 	if !quiet {
-		fmt.Printf("🔄 Converting %s...\n", filepath.Base(input))
+		fmt.Printf("Converting %s...\n", filepath.Base(input))
 	}
 
 	img, err := loadImage(input)
@@ -83,14 +93,21 @@ func main() {
 	duration := time.Since(startTime)
 	
 	if !quiet {
-		fmt.Printf("✅ Converted: %s → %s\n", filepath.Base(input), filepath.Base(output))
-		fmt.Printf("📊 Stats: %d blocks from %d pixels (%.1fx reduction)\n", 
+		fmt.Printf("Converted: %s -> %s\n", filepath.Base(input), filepath.Base(output))
+		fmt.Printf("Stats: %d blocks from %d pixels (%.1fx reduction)\n", 
 			len(blocks), w*h, float64(w*h)/float64(len(blocks)))
-		fmt.Printf("⏱️  Time: %v\n", duration.Round(time.Millisecond))
+		fmt.Printf("Time: %v\n", duration.Round(time.Millisecond))
 	} else {
 		log.Printf("Converted: %s -> %s (%d blocks, %v)", 
 			filepath.Base(input), filepath.Base(output), len(blocks), duration)
 	}
+}
+
+// Auto-generate output filename from input
+func autoGenerateOutputName(inputPath string) string {
+	ext := filepath.Ext(inputPath)
+	base := inputPath[:len(inputPath)-len(ext)]
+	return base + ".svg"
 }
 
 // ProgressTracker handles progress display
@@ -196,7 +213,7 @@ func resizeImage(img image.Image, maxW, maxH int) image.Image {
 	}
 
 	if !quiet {
-		fmt.Printf("📐 Resized: %dx%d → %dx%d\n", w, h, newW, newH)
+		fmt.Printf("Resized: %dx%d -> %dx%d\n", w, h, newW, newH)
 	}
 	return resized
 }
@@ -223,7 +240,7 @@ func calculateSize(w, h, maxW, maxH int) (int, int) {
 
 func findOptimalBlocks(img image.Image, w, h int, progress *ProgressTracker) []Block {
 	if !quiet {
-		fmt.Printf("🔍 Analyzing image...\n")
+		fmt.Printf("Analyzing image...\n")
 	}
 
 	grid := make([][]uint32, h)
@@ -244,7 +261,7 @@ func findOptimalBlocks(img image.Image, w, h int, progress *ProgressTracker) []B
 	var blocks []Block
 
 	if !quiet {
-		fmt.Printf("🧩 Finding optimal blocks...\n")
+		fmt.Printf("Finding optimal blocks...\n")
 	}
 
 	for y := 0; y < h; y++ {
@@ -336,7 +353,7 @@ func findMaxHeight(grid [][]uint32, x, y int, color uint32, width, maxY int) int
 
 func writeSVG(blocks []Block, w, h int, path string, progress *ProgressTracker) error {
 	if !quiet {
-		fmt.Printf("💾 Writing SVG file...\n")
+		fmt.Printf("Writing SVG file...\n")
 	}
 
 	file, err := os.Create(path)

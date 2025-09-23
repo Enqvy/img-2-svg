@@ -11,14 +11,27 @@ Ultra-optimized lossless image to SVG converter.
 - Performance stats: compression ratio and processing time
 
 - Quiet mode for scripts and batch processing
+
 ## Usage
 
 ```bash
-pixel2svg input.jpg output.svg
+# Absolute Minimum
+pixel2svg input.jpg
 ```
 # With options
 ```bash
-pixel2svg -i input.jpg -o output.svg -w 1920 -h 1080
+# Auto-generate output name
+pixel2svg photo.jpg
+
+# Explicit output name
+pixel2svg input.png output.svg
+
+# Resize with auto-generated name
+pixel2svg -i large.jpg -w 1920
+
+# Multiple files (use in scripts)
+pixel2svg -q image1.jpg
+pixel2svg -q image2.png
 ```
 ## Options
 ```

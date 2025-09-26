@@ -6,14 +6,14 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
-	"os"
+	"math"
 	"path/filepath"
 	"time"
 )
 
 type Block struct {
 	X, Y, Width, Height int
-	R, G, B             uint8
+	R, G, B, A          uint8  // Added Alpha channel
 }
 
 func loadAndPrepareImage(input string, width, height int) (image.Image, int64, error) {
@@ -31,6 +31,11 @@ func loadAndPrepareImage(input string, width, height int) (image.Image, int64, e
 		return nil, 0, fmt.Errorf("load image: %w", err)
 	}
 
+	// Check if image has transparency
+	if hasTransparency(img) && !quiet {
+		fmt.Printf("Image has transparency, optimizing transparent areas...\n")
+	}
+
 	if width > 0 || height > 0 {
 		img = resizeImage(img, width, height)
 	}
@@ -43,6 +48,22 @@ func loadAndPrepareImage(input string, width, height int) (image.Image, int64, e
 	}
 
 	return img, inputSize, nil
+}
+
+// hasTransparency checks if image contains transparent pixels
+func hasTransparency(img image.Image) bool {
+	bounds := img.Bounds()
+	
+	// Quick check: sample some pixels for transparency
+	for y := bounds.Min.Y; y < bounds.Max.Y && y < bounds.Min.Y+100; y += 10 {
+		for x := bounds.Min.X; x < bounds.Max.X && x < bounds.Min.X+100; x += 10 {
+			_, _, _, a := img.At(x, y).RGBA()
+			if a < 65535 { // Not fully opaque
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func loadAndValidateImage(path string) (image.Image, error) {
@@ -64,96 +85,45 @@ func loadAndValidateImage(path string) (image.Image, error) {
 	return img, nil
 }
 
-func resizeImage(img image.Image, maxW, maxH int) image.Image {
-	bounds := img.Bounds()
-	w, h := bounds.Dx(), bounds.Dy()
+// ... (rest of the existing functions remain the same until createColorGrid)
 
-	if maxW == 0 && maxH == 0 {
-		return img
-	}
-
-	newW, newH := calculateSize(w, h, maxW, maxH)
-	if newW == w && newH == h {
-		return img
-	}
-
-	resized := image.NewRGBA(image.Rect(0, 0, newW, newH))
-	scaleX, scaleY := float64(w)/float64(newW), float64(h)/float64(newH)
-
-	for y := 0; y < newH; y++ {
-		for x := 0; x < newW; x++ {
-			srcX, srcY := int(float64(x)*scaleX), int(float64(y)*scaleY)
-			resized.Set(x, y, img.At(srcX, srcY))
-		}
-	}
-
-	if !quiet {
-		fmt.Printf("Resized: %dx%d -> %dx%d\n", w, h, newW, newH)
-	}
-	return resized
-}
-
-func calculateSize(w, h, maxW, maxH int) (int, int) {
-	if maxW == 0 && maxH == 0 {
-		return w, h
-	}
-	if maxW == 0 {
-		maxW = w * maxH / h
-	}
-	if maxH == 0 {
-		maxH = h * maxW / w
-	}
-
-	ratio := float64(w) / float64(h)
-	newRatio := float64(maxW) / float64(maxH)
-
-	if ratio > newRatio {
-		return maxW, int(float64(maxW) / ratio)
-	}
-	return int(float64(maxH) * ratio), maxH
-}
-
-func convertImageToBlocks(img image.Image, width, height int) ([]Block, error) {
-	if !quiet {
-		fmt.Printf("Analyzing image...\n")
-	}
-
-	startTime := time.Now()
-	progress := NewProgressTracker(width*height, quiet)
-
-	grid := createColorGrid(img, width, height, progress)
-	blocks := findOptimalBlocks(grid, width, height)
-
-	progress.Finish()
-
-	if !quiet {
-		duration := time.Since(startTime)
-		fmt.Printf("Block detection completed in %v\n", duration.Round(time.Millisecond))
-	}
-
-	return blocks, nil
-}
-
-func createColorGrid(img image.Image, width, height int, progress *ProgressTracker) [][]uint32 {
-	grid := make([][]uint32, height)
+func createColorGrid(img image.Image, width, height int, progress *ProgressTracker) [][]ColorRGBA {
+	grid := make([][]ColorRGBA, height)
 	for y := 0; y < height; y++ {
-		grid[y] = make([]uint32, width)
+		grid[y] = make([]ColorRGBA, width)
 		for x := 0; x < width; x++ {
-			r, g, b, _ := img.At(x, y).RGBA()
-			grid[y][x] = (uint32(r>>8) << 16) | (uint32(g>>8) << 8) | uint32(b>>8)
+			r, g, b, a := img.At(x, y).RGBA()
+			grid[y][x] = ColorRGBA{
+				R: uint8(r >> 8),
+				G: uint8(g >> 8),
+				B: uint8(b >> 8),
+				A: uint8(a >> 8),
+			}
 			progress.Update(1)
 		}
 	}
 	return grid
 }
 
-func findOptimalBlocks(grid [][]uint32, width, height int) []Block {
+// ColorRGBA represents a color with alpha channel
+type ColorRGBA struct {
+	R, G, B, A uint8
+}
+
+// Pack RGBA into uint64 for comparison
+func (c ColorRGBA) ToUint64() uint64 {
+	return uint64(c.R)<<24 | uint64(c.G)<<16 | uint64(c.B)<<8 | uint64(c.A)
+}
+
+// findOptimalBlocks now uses ColorRGBA
+func findOptimalBlocks(grid [][]ColorRGBA, width, height int) []Block {
 	used := make([][]bool, height)
 	for i := range used {
 		used[i] = make([]bool, width)
 	}
 
 	var blocks []Block
+	transparentBlocks := 0
 
 	if !quiet {
 		fmt.Printf("Finding optimal blocks...\n")
@@ -166,24 +136,28 @@ func findOptimalBlocks(grid [][]uint32, width, height int) []Block {
 			}
 
 			color := grid[y][x]
-			maxWidth := findMaxWidth(grid, x, y, color, width)
-			maxHeight := findMaxHeight(grid, x, y, color, maxWidth, height)
+			
+			// Skip fully transparent pixels (optimization)
+			if color.A == 0 {
+				used[y][x] = true
+				transparentBlocks++
+				continue
+			}
 
-			// Expand rectangle if possible
-			expandedWidth, expandedHeight := expandBlock(grid, used, x, y, maxWidth, maxHeight, color, width, height)
+			maxWidth := findMaxWidthRGBA(grid, x, y, color, width)
+			maxHeight := findMaxHeightRGBA(grid, x, y, color, maxWidth, height)
 
-			r := uint8(color >> 16)
-			g := uint8(color >> 8)
-			b := uint8(color)
+			expandedWidth, expandedHeight := expandBlockRGBA(grid, used, x, y, maxWidth, maxHeight, color, width, height)
 
 			blocks = append(blocks, Block{
 				X:      x,
 				Y:      y,
 				Width:  expandedWidth,
 				Height: expandedHeight,
-				R:      r,
-				G:      g,
-				B:      b,
+				R:      color.R,
+				G:      color.G,
+				B:      color.B,
+				A:      color.A,
 			})
 
 			markBlockUsed(used, x, y, expandedWidth, expandedHeight)
@@ -192,16 +166,41 @@ func findOptimalBlocks(grid [][]uint32, width, height int) []Block {
 		}
 	}
 
+	if !quiet && transparentBlocks > 0 {
+		fmt.Printf("Optimized: skipped %d transparent blocks\n", transparentBlocks)
+	}
+
 	return blocks
 }
 
-func expandBlock(grid [][]uint32, used [][]bool, x, y, width, height int, color uint32, maxX, maxY int) (int, int) {
+// Updated functions for RGBA color handling
+func findMaxWidthRGBA(grid [][]ColorRGBA, x, y int, color ColorRGBA, maxX int) int {
+	width := 1
+	for x+width < maxX && grid[y][x+width] == color {
+		width++
+	}
+	return width
+}
+
+func findMaxHeightRGBA(grid [][]ColorRGBA, x, y int, color ColorRGBA, width, maxY int) int {
+	height := 1
+	for y+height < maxY {
+		for i := 0; i < width; i++ {
+			if grid[y+height][x+i] != color {
+				return height
+			}
+		}
+		height++
+	}
+	return height
+}
+
+func expandBlockRGBA(grid [][]ColorRGBA, used [][]bool, x, y, width, height int, color ColorRGBA, maxX, maxY int) (int, int) {
 	expandedWidth, expandedHeight := width, height
 
 	for {
 		expanded := false
 
-		// Try expand right
 		if x+expandedWidth < maxX {
 			canExpand := true
 			for i := y; i < y+expandedHeight; i++ {
@@ -216,7 +215,6 @@ func expandBlock(grid [][]uint32, used [][]bool, x, y, width, height int, color 
 			}
 		}
 
-		// Try expand down
 		if y+expandedHeight < maxY {
 			canExpand := true
 			for i := x; i < x+expandedWidth; i++ {
